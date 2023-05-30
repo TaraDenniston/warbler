@@ -30,7 +30,10 @@
                 {% endif %}
 
               </div>
-              <p class="card-bio">{{ user.bio }}</p>
+              {% if follower.bio %}
+              <p class="card-bio">{{ follower.bio }}</p>
+              {% else %}
+              {% endif %}
             </div>
           </div>
         </div>
