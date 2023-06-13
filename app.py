@@ -4,8 +4,8 @@ from flask import Flask, render_template, request, flash, redirect, session, g
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
-from forms import UserAddForm, LoginForm, MessageForm
-from models import db, connect_db, User, Message
+from forms import UserAddForm, UserEditForm, LoginForm, MessageForm
+from models import db, connect_db, User, Message, Likes
 
 CURR_USER_KEY = "curr_user"
 
@@ -143,6 +143,10 @@ def list_users():
 def users_show(user_id):
     """Show user profile."""
 
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
     user = User.query.get_or_404(user_id)
 
     # snagging messages in order from the database;
@@ -184,8 +188,6 @@ def users_followers(user_id):
 def add_follow(follow_id):
     """Add a follow for the currently-logged-in user."""
 
-    breakpoint()
-
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")
@@ -212,11 +214,61 @@ def stop_following(follow_id):
     return redirect(f"/users/{g.user.id}/following")
 
 
+@app.route('/users/add_like/<int:msg_id>', methods=['POST'])
+def add_like(msg_id):
+    """Add a liked message for the current user."""
+
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    
+    # Create new instance of Likes model
+    new_like = Likes(user_id=g.user.id, message_id=msg_id)
+
+    # Add new like to database
+    db.session.add(new_like)
+    db.session.commit()
+
+    return redirect(f"/users/{g.user.id}/likes")
+
+
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
     """Update profile for current user."""
 
-    # IMPLEMENT THIS
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    
+    form = UserEditForm()
+
+    if form.validate_on_submit():
+        # Get updated user info from from
+        username = form.username.data
+        email = form.email.data
+        image_url = form.image_url.data
+        header_image_url = form.header_image_url.data
+        bio = form.bio.data
+        password = form.password.data
+
+        # Check to see whether password is valid
+        if not User.authenticate(g.user.username, password):
+            flash("Password incorrect.", "danger")
+            return redirect("/")
+
+        # Update user with new data
+        if username: g.user.username = username
+        if email: g.user.email = email
+        if image_url: g.user.image_url = image_url
+        if header_image_url: g.user.header_image_url = header_image_url
+        if bio: g.user.bio = bio
+
+        # Update database
+        db.session.commit()
+
+        return redirect(f"/users/{g.user.id}")
+
+    return render_template('users/edit.html', form=form)
 
 
 @app.route('/users/delete', methods=["POST"])
@@ -297,11 +349,21 @@ def homepage():
     """
 
     if g.user:
+        ids = [f.id for f in g.user.following] + [g.user.id]
         messages = (Message
                     .query
+                    .filter(Message.user_id.in_(ids))
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
+        
+        # Had trouble with this one.....
+        # First tried filtering by Message.user objects in g.user.following, 
+        # but error told me that functionality wasn't implemented yet. :/ 
+        # Then it suggested I use indexed keys. That made sense. :)
+        # During my struggles I learned that .filter() can use an expression
+        # but .filter_by() cannot. I also learned that the documentation 
+        # for SQLAlchemy is really hard to navigate and understand.      
 
         return render_template('home.html', messages=messages)
 
