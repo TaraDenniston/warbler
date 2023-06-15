@@ -202,7 +202,7 @@ def show_likes(user_id):
                 .order_by(Message.timestamp.desc())
                 .all())
 
-    return render_template('users/likes.html', user=user, messages=messages)
+    return render_template('users/likes.html', user=user, messages=messages, likes=liked_msg_ids)
 
 
 @app.route('/users/follow/<int:follow_id>', methods=['POST'])
@@ -251,7 +251,7 @@ def add_like(msg_id):
         liked_msg = Message.query.get(msg_id)
         g.user.likes.remove(liked_msg)
         db.session.commit()
-        
+
     # If like doesn't exist...   
     else:
 
