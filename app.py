@@ -237,18 +237,30 @@ def stop_following(follow_id):
 
 @app.route('/users/add_like/<int:msg_id>', methods=['POST'])
 def add_like(msg_id):
-    """Add a liked message for the current user."""
+    """Toggle liked message on or off for the current user."""
 
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")
     
-    # Create new instance of Likes model
-    new_like = Likes(user_id=g.user.id, message_id=msg_id)
+    # Check to see if like already exists
+    likes = [l.id for l in g.user.likes]
+    if msg_id in likes:
 
-    # Add new like to database
-    db.session.add(new_like)
-    db.session.commit()
+        # If like exists, remove it
+        liked_msg = Message.query.get(msg_id)
+        g.user.likes.remove(liked_msg)
+        db.session.commit()
+        
+    # If like doesn't exist...   
+    else:
+
+        # Create new instance of Likes model
+        new_like = Likes(user_id=g.user.id, message_id=msg_id)
+
+        # Add new like to database
+        db.session.add(new_like)
+        db.session.commit()
 
     return redirect(f"/users/{g.user.id}/likes")
 
@@ -384,9 +396,11 @@ def homepage():
         # Then it suggested I use indexed keys. That made sense. :)
         # During my struggles I learned that .filter() can use an expression
         # but .filter_by() cannot. I also learned that the documentation 
-        # for SQLAlchemy is really hard to navigate and understand.      
+        # for SQLAlchemy is really hard to navigate and understand.
 
-        return render_template('home.html', messages=messages)
+        likes = [l.id for l in g.user.likes]
+
+        return render_template('home.html', messages=messages, likes=likes)
 
     else:
         return render_template('home-anon.html')
